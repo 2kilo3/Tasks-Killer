@@ -36,8 +36,8 @@ git clone https://github.com/2kilo3/Tasks-Killer.git
 
 顺序固定：目标与验收 → 材料与缺口 → 实现 → 对照真实产物验收。没过的只返工没过的部分。一个编排者写 `state.json` 和 `progress/STATUS.md`。
 
-1. 目标写成可追溯的文档。独立 AI 对照材料审过，`record_goal_review` 为 pass，才进入等人确认。
-2. 最终结果同样先由独立 AI 对照目标和真实产物审过，`record_review` 为 pass，人看验证材料。
+1. 目标写成可追溯的文档。独立 AI 对照材料审过，`record_goal_review` 为 pass，才请人确认。
+2. 最终结果同样先由独立 AI 对照目标和真实产物审过，`record_review` 为 pass，才请人看验证材料。
 
 沉默不是确认。`confirm` 和 `confirm_final` 要宿主核对过的 `message_ref`。进度、中间稿、把一条纠正收成检查，都不叫人。缺权限、材料冲突、环境不可用，或你点名要看某一步时才停。
 
