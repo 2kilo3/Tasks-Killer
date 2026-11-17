@@ -1,5 +1,25 @@
 # 验证说明
 
+## 3.0.0
+
+主技能是 tasks-killer。lab-report 只处理文档。私有经验库和对应测试已删除。执行证据门不再默认打开。样式检查对照声明的字体和字号。图幅检查在缺少页尺寸时报告缺口。
+
+2026-11-17 在本环境实际跑过：`python -B -m unittest discover -s tests -p "test_*.py"` 91 项通过；`python -B formal/check_model.py` 两套配置（43 与 101 个可达状态）无违反；`python -B scripts/constraint_lint.py` 7 条规则通过。TLC（tla2tools，TLC2 Version 2026.11.15）对 `formal/TasksKiller.cfg` 检查完成，43 个不同状态，无错误。本环境没有 Lean，`formal/TasksKiller.lean` 未在这里执行。
+
+本轮要跑的命令：
+
+```sh
+python -B -m unittest discover -s tests -p "test_*.py"
+python -B formal/check_model.py
+python -B scripts/constraint_lint.py
+```
+
+TLA+ 用 `java -cp tla2tools.jar tlc2.TLC -config formal/TasksKiller.cfg formal/TasksKiller.tla`。Lean 用 `lean formal/TasksKiller.lean`。工具不在环境里时，模型、证明和 `check_model.py` 仍然在仓库里；当次有没有跑成，写在该次记录里，不把命令本身当成结果。
+
+这些检查不证明真实课程实验、真实页面或某家宿主已经端到端跑通。
+
+以下是 3.0.0 之前的记录，里面提到的经验库已经不在仓库里。
+
 版本 2.0 基于公开版本 1.5 的固定提交 `f2b8b76167f029896bdda91b49cfc8fc82d1d567` 修改。验证日期：2026-10-22。它包含 Markdown 工作流与最小状态辅助器，不包含真实课程环境。
 
 ## 2.0 已做的检查

@@ -1,0 +1,10 @@
+{
+  "id": "no-default-word-deliverable",
+  "paths": [
+    "SKILL.md",
+    "references/requirements-note.md",
+    "references/execution.md"
+  ],
+  "forbid_regex": ["默认可编辑 Word", "默认交付可编辑 Word"],
+  "message": "Read the deliverable from the task and the confirmed intention. If it is missing, ask once."
+}

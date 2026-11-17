@@ -52,7 +52,7 @@ Step Card（执行卡）把已确认意图翻译成**可逐步执行、可逐步
 3. **标记并冻结**：把卡改为 `frozen: true`，调用 `freeze_plan`，请求中带卡路径和真实确认引用 `message_ref`。脚本校验卡结构，并记录卡摘要与当前意图摘要。
 4. **执行**：一次做一步；每步后观察结果，调用 `complete_step`，提交真实证据路径和逐项 `must_include` 结果。
 5. **封存**：全部步骤完成后调用 `bind_evidence`。脚本核对所有步骤、证据文件和摘要，生成 `evidence_binder`。
-6. **写作出口**：`submit_draft` 在 `execution_required=true`（新任务默认）或登记过执行卡时，要求冻结卡 + 全部步骤完成 + 证据绑定通过；纯审查、纯写作须在确认意图前用 `set_execution_required` 显式关闭，旧状态缺该字段时保留 deprecated 旁路。
+6. **提交出口**：`execution_required` 为 true 时，`submit_draft` 要求冻结卡、全部步骤完成、证据绑定通过。这个门来自 `task_type` 或确认前的显式设置，不默认打开。纯写作、纯审查和未声明类型不走这道门。登记过执行卡时，即使门是关的，已登记的步骤仍须做完并绑定。
 
 卡与意图摘要绑定：意图 MD 变化会使旧卡失效并要求重新确认与冻结，不能沿用旧步骤记录。**改卡/重冻结**：修改卡文件后再次调用 `freeze_plan`，必须提供 `reason`；脚本清除旧的步骤完成记录和证据绑定，要求重新执行受影响步骤。发现更优解、指导书歧义或环境变化时，先改卡再继续，不先做后补。
 
@@ -69,166 +69,10 @@ Step Card（执行卡）把已确认意图翻译成**可逐步执行、可逐步
 
 脚本只检查文件存在、摘要和结构化结果，不能判断截图内容是否真的可读、操作是否真的发生；这些仍由执行者和独立审查负责。
 
-## 5. 示例（5 张）
+## 5. 最小 JSON
 
-以下示例覆盖下载、配置编辑、抓包、编译运行、进程检查。实际任务按指导书裁剪，不照抄字段值。
-
-```yaml
-# steps.yaml（建议同时生成 实验执行卡.md 人读版）
-version: "1.0"
-frozen: false  # 用户确认后 true
-steps:
-  - id: S1
-    source: "指导书§3.1 从课程网站下载实验包"
-    goal: "完成实验包下载并在文件夹中可见"
-    modality: gui   # gui | cli | mixed | manual
-    action: "打开课程下载页 → 点击下载 → 在资源管理器打开目标目录"
-    screenshot_required: true
-    must_include:
-      - "浏览器下载页或下载进度/完成提示"
-      - "资源管理器中可见实验包文件名与大小"
-    forbidden_shortcuts:
-      - "curl/wget/Invoke-WebRequest 静默下载作为本步主证据"
-      - "SHA-256/Get-FileHash/md5 画面作为本步主证据"
-      - "仅 ls/dir 文本输出冒充文件夹查看"
-    verify: "目录截图可辨认文件名；不得声称字节完整除非另有步骤"
-    on_fail: "retry_once → ask_user"
-    evidence_ids: ["E1"]
-
-  - id: S2
-    source: "指导书§3.2 用记事本打开 config.ini 修改 server=..."
-    goal: "在 GUI 编辑器中修改并保存配置"
-    modality: gui
-    action: "记事本打开 config.ini → 修改 → 保存"
-    screenshot_required: true
-    must_include:
-      - "编辑器标题栏含文件名"
-      - "修改后的 server= 行可读"
-      - "保存后文件仍打开或保存成功提示"
-    forbidden_shortcuts:
-      - "sed/echo重定向/Set-Content 静默改文件只交 diff"
-      - "cat 终端输出冒充记事本"
-    verify: "重新打开或同屏可见新值"
-    on_fail: "restore_backup → retry"
-    evidence_ids: ["E2"]
-
-  - id: S3
-    source: "指导书§4 使用 Wireshark 捕获并查看 Packet-In"
-    goal: "GUI 中选中报文并展开字段"
-    modality: gui
-    tool: "Wireshark"
-    action: "启动 Wireshark → 开始捕获 → 选中 Packet-In → 展开报文树"
-    screenshot_required: true
-    must_include:
-      - "Wireshark 主窗口"
-      - "选中 Packet-In"
-      - "报文树中 Version/Type/Length 等关键字段可读"
-    forbidden_shortcuts:
-      - "tshark/tcpdump 文本冒充 Wireshark"
-      - "只提供 pcap 路径无界面截图"
-      - "合并「开始捕获」与「展开字段」导致缺选中态"
-    verify: "字段名与指导书一致且可读"
-    on_fail: "replan_capture_filter"
-    evidence_ids: ["E3"]
-
-  - id: S4
-    source: "指导书§5 编译 hello.c 并运行"
-    goal: "分步展示编译与运行输出"
-    modality: cli
-    action: "在可见终端执行编译命令；再执行运行命令"
-    screenshot_required: true
-    # 若指导书拆成两步，应拆成 S4a/S4b；此处演示「一步内仍禁止只留最后一屏」
-    must_include:
-      - "编译命令与退出状态/无错误输出"
-      - "运行命令与程序输出"
-      - "提示符"
-    forbidden_shortcuts:
-      - "编译与运行合并到只截最终输出一屏（当指导书分列时）"
-      - "未执行却写编译通过"
-      - "伪造终端文本图"
-    verify: "两段命令均可见；后台定位工具不替代本屏"
-    on_fail: "fix_code → rebuild"
-    evidence_ids: ["E4a", "E4b"]
-
-  - id: S5
-    source: "指导书§2 在任务管理器中确认服务已启动"
-    goal: "GUI 确认进程/服务状态"
-    modality: gui
-    action: "打开任务管理器或服务管理 → 定位目标进程/服务"
-    screenshot_required: true
-    must_include:
-      - "任务管理器/服务窗口标题"
-      - "目标进程或服务名称与状态"
-    forbidden_shortcuts:
-      - "tasklist/Get-Process/ps 文本冒充任务管理器"
-      - "假设服务已启动而跳过本步"
-    verify: "状态与指导书期望一致"
-    on_fail: "start_service_via_guide_steps → recapture"
-    evidence_ids: ["E5"]
-```
-
-机器登记用的 JSON 与上面同字段，例如：
+机器只读 JSON。字段以上表为准，按当次指导书填，不照抄工具名。
 
 ```json
-{
-  "version": "1.0",
-  "frozen": true,
-  "steps": [
-    {
-      "id": "S1",
-      "source": "指导书§3.1 从课程网站下载实验包",
-      "goal": "完成实验包下载并在文件夹中可见",
-      "modality": "gui",
-      "action": "打开课程下载页 → 点击下载 → 在资源管理器打开目标目录",
-      "screenshot_required": true,
-      "must_include": ["浏览器下载页或下载进度/完成提示", "资源管理器中可见实验包文件名与大小"],
-      "forbidden_shortcuts": ["curl/wget/Invoke-WebRequest 静默下载作为本步主证据", "SHA-256/Get-FileHash/md5 画面作为本步主证据", "仅 ls/dir 文本输出冒充文件夹查看"],
-      "verify": "目录截图可辨认文件名；不得声称字节完整除非另有步骤",
-      "on_fail": "retry_once → ask_user",
-      "evidence_ids": ["E1"]
-    }
-  ]
-}
+{"version":"1.0","frozen":true,"steps":[{"id":"S1","source":"指导书对应节","goal":"本步可观察结果","modality":"gui","tool":"指导书点名的工具","objects":["对象甲"],"action":"在该工具里完成指导书这一步","screenshot_required":true,"must_include":["指导书点名的工具 窗口","对象甲"],"forbidden_shortcuts":["用另一工具的文本输出冒充该窗口"],"verify":"窗口里能读到对象甲","on_fail":"retry_once","evidence_ids":["E1"]}]}
 ```
-
-具名工具与对象清单的最小写法（`[来源:lab8-iter]`）：
-
-```yaml
-  - id: S6
-    source: "指导书§4.2 用 Postman 验证 REST 服务"
-    goal: "在 Postman 中发起 GET 并读响应"
-    modality: gui
-    tool: "Postman"
-    objects: ["http://<客户机IP>:5000/restconf/data/..."]
-    action: "在 Postman 填 URL → Send → 展开响应"
-    screenshot_required: true
-    must_include:
-      - "Postman 窗口与请求 URL"
-      - "响应状态码与响应体关键字段"
-    forbidden_shortcuts:
-      - "curl/Invoke-RestMethod 输出冒充 Postman 窗口"
-      - "只交接口返回值文本，不交 Postman 界面"
-
-  - id: S7
-    source: "指导书§2 基础拓扑"
-    goal: "按 c0+s1/s2/s3+h1–h6 建成拓扑"
-    modality: gui
-    tool: "MiniEdit"
-    objects: ["c0", "s1", "s2", "s3", "h1", "h2", "h3", "h4", "h5", "h6"]
-    action: "在 MiniEdit 放置节点并连线"
-    screenshot_required: true
-    must_include:
-      - "MiniEdit 画布中 c0、s1/s2/s3、h1–h6 全部可见"
-      - "节点名称与连线可读"
-    forbidden_shortcuts:
-      - "用同实验的进阶 1s3h 拓扑冒充基础拓扑"
-      - "只交 ping 输出不交拓扑画布"
-```
-
-## 6. 反例（不要把卡写成这样）
-
-- `must_include: ["截图"]`：没有可核对字段，等于没验收。
-- `forbidden_shortcuts: ["不要作弊"]`：不是可粘贴的具体短语，无法指导执行。
-- 把“下载 + 安装 + 启动”写成一步，且只要求一张最终界面：会漏掉指导书要求的中间验收点。
-- `modality: gui` 但 `must_include` 只写“成功”：无法排除 CLI 文本冒充或空白截图。
-- 先执行后补卡：违反“执行前冻结”，`complete_step` 会因无冻结卡拒绝。

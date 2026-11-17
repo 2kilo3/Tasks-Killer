@@ -34,9 +34,9 @@ R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
 
 EMU_PER_MM = 36000
 TWIPS_PER_MM = 1440 / 25.4
+# OOXML omits cell margins when they are the format default (108 twips). That
+# is a cell-padding default, not a page-size guess.
 DEFAULT_CELL_MARGIN_TWIPS = 108
-DEFAULT_PAGE_TWIPS = (11906, 16838)
-DEFAULT_MARGIN_TWIPS = 1440
 
 # Adjustable estimate, not a measured value: a typical line of text in a
 # desktop screenshot is roughly 20 px high. Real captures differ with UI font
@@ -204,28 +204,45 @@ def _block_section_index(body):
 
 
 def _section_layouts(document):
+    """Read each section's real page size. A missing size or margin is a gap.
+
+    This never substitutes a paper size. Callers must report the gap.
+    """
     layouts = []
-    for section in document.sections:
-        page_width = _mm_from_emu(section.page_width) if section.page_width else _mm_from_twips(DEFAULT_PAGE_TWIPS[0])
-        left = _mm_from_emu(section.left_margin) if section.left_margin else _mm_from_twips(DEFAULT_MARGIN_TWIPS)
-        right = _mm_from_emu(section.right_margin) if section.right_margin else _mm_from_twips(DEFAULT_MARGIN_TWIPS)
+    for index, section in enumerate(document.sections):
+        missing = []
+        if not section.page_width:
+            missing.append('page width')
+        if section.left_margin is None:
+            missing.append('left margin')
+        if section.right_margin is None:
+            missing.append('right margin')
         gutter = _mm_from_emu(section.gutter) if section.gutter else 0.0
-        width = page_width - left - right - gutter
         columns = 1
         space_mm = 0.0
         cols = section._sectPr.find(qn('w:cols')) if section._sectPr is not None else None
         if cols is not None:
             columns = max(_attr_int(cols, 'w:num', 1), 1)
             space_mm = _mm_from_twips(_attr_int(cols, 'w:space', 720))
-        if columns > 1 and width > 0:
-            width = (width - space_mm * (columns - 1)) / columns
+        gap = None
+        page_width = left = right = text_width = None
+        if missing:
+            gap = 'section ' + str(index) + ' is missing ' + ', '.join(missing) + '; page size was not assumed'
+        else:
+            page_width = _mm_from_emu(section.page_width)
+            left = _mm_from_emu(section.left_margin)
+            right = _mm_from_emu(section.right_margin)
+            text_width = page_width - left - right - gutter
+            if columns > 1 and text_width > 0:
+                text_width = (text_width - space_mm * (columns - 1)) / columns
         layouts.append({
-            'page_width_mm': round(page_width, 1),
-            'left_margin_mm': round(left, 1),
-            'right_margin_mm': round(right, 1),
+            'page_width_mm': None if page_width is None else round(page_width, 1),
+            'left_margin_mm': None if left is None else round(left, 1),
+            'right_margin_mm': None if right is None else round(right, 1),
             'gutter_mm': round(gutter, 1),
             'columns': columns,
-            'text_width_mm': round(max(width, 0.0), 1),
+            'text_width_mm': None if text_width is None else round(max(text_width, 0.0), 1),
+            'gap': gap,
         })
     return layouts
 
@@ -277,6 +294,7 @@ def inspect_document(source, glyph_px=DEFAULT_GLYPH_PX, min_font_mm=DEFAULT_MIN_
     images = []
     overwide = 0
     small_text = 0
+    gaps = [layout['gap'] for layout in layouts if layout.get('gap')]
 
     for number, (drawing, placement, cx, cy, rel_id) in enumerate(_iter_pictures(body), start=1):
         block = _top_level_block(drawing, body)
@@ -284,9 +302,13 @@ def inspect_document(source, glyph_px=DEFAULT_GLYPH_PX, min_font_mm=DEFAULT_MIN_
             section_index = section_by_index[block_positions[id(block)]]
         except KeyError:
             section_index = len(layouts) - 1 if layouts else 0
-        layout = layouts[section_index] if layouts else {'text_width_mm': 0.0}
+        layout = layouts[section_index] if layouts else {'text_width_mm': None, 'gap': 'no section layout'}
         cell = _cell_ancestor(drawing)
-        if cell is not None:
+        container_mm = None
+        if layout.get('gap') or layout.get('text_width_mm') is None:
+            container_source = 'unavailable'
+            container = 'body'
+        elif cell is not None:
             container_mm, container_source = _cell_container_mm(cell, layout['text_width_mm'])
             container = 'table_cell'
         else:
@@ -300,13 +322,16 @@ def inspect_document(source, glyph_px=DEFAULT_GLYPH_PX, min_font_mm=DEFAULT_MIN_
 
         warnings = []
         status = 'ok'
+        if layout.get('gap') or container_mm is None:
+            status = 'page_gap'
+            warnings.append(layout.get('gap') or 'container width unknown')
         if placement != 'inline':
             warnings.append('floating_placement_width_approximate')
         if not cx:
             warnings.append('display_width_missing')
             if status == 'ok':
                 status = 'unknown'
-        if width_mm > container_mm + WIDTH_TOLERANCE_MM:
+        if container_mm is not None and width_mm > container_mm + WIDTH_TOLERANCE_MM:
             status = 'overwide'
             overwide += 1
             warnings.append('width_exceeds_container')
@@ -331,7 +356,7 @@ def inspect_document(source, glyph_px=DEFAULT_GLYPH_PX, min_font_mm=DEFAULT_MIN_
             'part': str(part.partname) if part is not None else None,
             'placement': placement,
             'container': container,
-            'container_width_mm': round(container_mm, 1),
+            'container_width_mm': None if container_mm is None else round(container_mm, 1),
             'container_width_source': container_source,
             'display_width_mm': round(width_mm, 1),
             'display_height_mm': round(height_mm, 1),
@@ -345,7 +370,8 @@ def inspect_document(source, glyph_px=DEFAULT_GLYPH_PX, min_font_mm=DEFAULT_MIN_
 
     vml_skipped = _vml_picture_count(body)
     return {
-        'ok': overwide == 0,
+        'ok': overwide == 0 and not gaps,
+        'gaps': gaps,
         'glyph_px': glyph_px,
         'min_font_mm': min_font_mm,
         'sections': layouts,
@@ -358,14 +384,19 @@ def inspect_document(source, glyph_px=DEFAULT_GLYPH_PX, min_font_mm=DEFAULT_MIN_
 
 def format_summary(report):
     lines = []
+    for gap in report.get('gaps') or []:
+        lines.append('GAP ' + gap)
     for section in report['sections']:
+        if section.get('gap'):
+            continue
         line = ('页宽 {page_width_mm} mm，左右边距 {left_margin_mm}/{right_margin_mm} mm，'
                 '正文可用宽 {text_width_mm} mm').format(**section)
         if section['columns'] > 1:
             line += '（{} 栏）'.format(section['columns'])
         lines.append(line)
     for image in report['images']:
-        line = '#{index} {container} 显示 {display_width_mm}/{container_width_mm} mm'.format(**image)
+        width = 'unknown' if image['container_width_mm'] is None else image['container_width_mm']
+        line = '#{index} {container} 显示 {display_width_mm}/{width} mm'.format(width=width, **image)
         if image['px_width']:
             line += ' | 原图 {px_width}x{px_height} px'.format(**image)
         if image['glyph_height_mm'] is not None:
@@ -375,11 +406,13 @@ def format_summary(report):
                 round(image['display_width_mm'] - image['container_width_mm'], 1))
         elif image['status'] == 'small_text':
             line += '  WARN 字高低于 {} mm'.format(report['min_font_mm'])
+        elif image['status'] == 'page_gap':
+            line += '  GAP 缺少页面尺寸，未假定纸张'
         elif image['status'] == 'unknown':
             line += '  WARN 无法估算（' + ','.join(image['warnings']) + '）'
         lines.append(line)
-    lines.append('共 {} 张图：超宽 {} 张，字高低于阈值 {} 张'.format(
-        len(report['images']), report['overwide'], report['small_text']))
+    lines.append('共 {} 张图：超宽 {} 张，字高低于阈值 {} 张，页面尺寸缺口 {}'.format(
+        len(report['images']), report['overwide'], report['small_text'], len(report.get('gaps') or [])))
     if report['vml_pictures_skipped']:
         lines.append('另有 {} 张旧式 VML 图片未检查'.format(report['vml_pictures_skipped']))
     return '\n'.join(lines)

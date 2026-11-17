@@ -30,8 +30,18 @@ class MachineGateTests(unittest.TestCase):
     def call(self, action, **kwargs):
         return w.transact(self.state, dict(action=action, **kwargs))
 
+    def pass_goal_review(self):
+        state = self.call('status')
+        value = dict(reviewer='goal-reviewer', context_ref='synthetic-test-only:goal-context',
+                     target='goal', verdict='pass',
+                     intention_sha256=state['intention']['sha256'],
+                     findings=[{'item': 'scope', 'status': 'pass', 'reason': 'Synthetic goal matches the fixture'}])
+        (self.root / 'goal-review.json').write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+        return self.call('record_goal_review', path='goal-review.json')
+
     def confirmed(self, path='意图.md', **kwargs):
         self.call('submit_intention', path=path, **kwargs)
+        self.pass_goal_review()
         return self.call('confirm', message_ref='synthetic-test-only:user-confirmation')
 
     def step(self, step_id='S1', **overrides):
@@ -62,13 +72,16 @@ class MachineGateTests(unittest.TestCase):
 
     # M1: execution_required
 
-    def test_new_state_defaults_to_execution_required(self):
+    def test_new_state_does_not_default_execution_required(self):
         state = self.init()
-        self.assertTrue(state['execution_required'])
+        self.assertEqual(state['task_type'], 'unspecified')
+        self.assertFalse(state['execution_required'])
         self.assertTrue(state['require_materials_map'])
+        self.assertTrue((self.root / 'progress' / 'STATUS.md').is_file())
 
     def test_execution_required_rejects_uncarded_draft(self):
-        self.init(require_materials_map=False)
+        state = self.init(task_type='execution', require_materials_map=False)
+        self.assertTrue(state['execution_required'])
         self.confirmed()
         with self.assertRaises(w.GuardError) as caught:
             self.submit()
@@ -157,7 +170,7 @@ class MachineGateTests(unittest.TestCase):
             self.call('submit_intention', path='意图.md', map_ids=['M9'])
         self.assertIn('M9', str(caught.exception))
         state = self.call('submit_intention', path='意图.md', map_ids=['M1'])
-        self.assertEqual(state['phase'], 'awaiting_confirmation')
+        self.assertEqual(state['phase'], 'goal_review')
 
     def test_changed_materials_map_must_be_reregistered(self):
         self.init(execution_required=False, require_materials_map=True)
@@ -169,7 +182,7 @@ class MachineGateTests(unittest.TestCase):
         self.assertIn('changed', str(caught.exception))
         self.call('register_materials_map', path='MATERIALS_MAP.md')
         self.assertEqual(self.call('submit_intention', path='意图.md', map_ids=['M1'])['phase'],
-                         'awaiting_confirmation')
+                         'goal_review')
 
     def test_materials_map_gate_can_be_disabled_with_reason(self):
         self.init(execution_required=False, require_materials_map=False)
@@ -179,7 +192,7 @@ class MachineGateTests(unittest.TestCase):
                   reason='Re-enable map gate for this intake')
         self.call('set_require_materials_map', require_materials_map=False,
                   reason='User supplied a single already-indexed task sheet')
-        self.assertEqual(self.call('submit_intention', path='意图.md')['phase'], 'awaiting_confirmation')
+        self.assertEqual(self.call('submit_intention', path='意图.md')['phase'], 'goal_review')
 
     # M4: independent-review whitelist gate
 
@@ -188,6 +201,7 @@ class MachineGateTests(unittest.TestCase):
         self.write_map()
         self.call('register_materials_map', path='MATERIALS_MAP.md')
         self.call('submit_intention', path='意图.md', map_ids=['M1'])
+        self.pass_goal_review()
         self.call('confirm', message_ref='synthetic-test-only:user-confirmation')
         self.write_plan()
         self.freeze()
@@ -241,14 +255,25 @@ class DoneGateTests(unittest.TestCase):
         self.call('init', maker='maker-session', sources=['source.txt'],
                   execution_required=False, require_materials_map=False)
         # The deliverable exists before init only as a stale leftover until touched.
-        os.utime(self.root / 'report.docx')
+        later = time.time() + 2
+        os.utime(self.root / 'report.docx', (later, later))
         self.call('submit_intention', path='意图.md')
+        self.pass_goal_review()
         self.call('confirm', message_ref='synthetic-test-only:user-confirmation')
         self.call('submit_draft', paths=['report.docx'], evidence=['screen.png'])
         self.write_receipt()
 
     def call(self, action, **kwargs):
         return w.transact(self.state, dict(action=action, **kwargs))
+
+    def pass_goal_review(self):
+        state = self.call('status')
+        value = dict(reviewer='goal-reviewer', context_ref='synthetic-test-only:goal-context',
+                     target='goal', verdict='pass',
+                     intention_sha256=state['intention']['sha256'],
+                     findings=[{'item': 'scope', 'status': 'pass', 'reason': 'Synthetic goal matches the fixture'}])
+        (self.root / 'goal-review.json').write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+        return self.call('record_goal_review', path='goal-review.json')
 
     def write_receipt(self):
         state = self.call('status')
@@ -257,13 +282,14 @@ class DoneGateTests(unittest.TestCase):
                      checks={key: {'status': 'pass', 'reason': 'Synthetic fixture check'} for key in w.CHECKS})
         (self.root / 'review.json').write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
         self.call('record_review', path='review.json')
+        self.call('confirm_final', message_ref='synthetic-test-only:final-confirmation')
 
     def test_finish_requires_artifact_list(self):
         for request in ({}, {'artifacts': []}, {'artifacts': ['']}):
             with self.assertRaises(w.GuardError) as caught:
                 self.call('finish', **request)
             self.assertIn('artifacts', str(caught.exception))
-        self.assertEqual(self.call('status')['phase'], 'review')
+        self.assertEqual(self.call('status')['phase'], 'awaiting_final')
 
     def test_finish_rejects_missing_empty_stale_and_duplicate_artifacts(self):
         (self.root / 'empty.docx').write_bytes(b'')
@@ -283,7 +309,7 @@ class DoneGateTests(unittest.TestCase):
         with self.assertRaises(w.GuardError) as caught:
             self.call('finish', artifacts=['report.docx', 'report.docx'])
         self.assertIn('duplicate artifact', str(caught.exception))
-        self.assertEqual(self.call('status')['phase'], 'review')
+        self.assertEqual(self.call('status')['phase'], 'awaiting_final')
 
     def test_finish_accepts_fresh_deliverable_and_records_it(self):
         state = self.call('finish', artifacts=['report.docx'])

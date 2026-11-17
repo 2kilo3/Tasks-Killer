@@ -1,0 +1,6 @@
+{
+  "id": "no-silent-paper-size",
+  "paths": ["skills/lab-report/scripts/figure_fit_check.py"],
+  "forbid_regex": ["11906", "DEFAULT_PAGE", "A4"],
+  "message": "Figure fit must use the document page size. A missing size is a gap, not a silent paper-size fallback."
+}

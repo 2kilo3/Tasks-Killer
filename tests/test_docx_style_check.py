@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import zipfile
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'docx_style_check.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'skills' / 'lab-report' / 'scripts' / 'docx_style_check.py'
 spec = importlib.util.spec_from_file_location('docx_style_check', SCRIPT)
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
@@ -29,19 +29,19 @@ DOCUMENT = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 class DocxStyleCheckTests(unittest.TestCase):
     def test_heading_font_and_size_upgrades_are_flagged(self):
-        records = checker.find_violations(DOCUMENT.encode('utf-8'), 24)
+        records = checker.find_violations(DOCUMENT.encode('utf-8'), 24, '宋体')
         self.assertEqual([record['paragraph'] for record in records],
                          ['2.1 实验步骤', '2.1 实验步骤', '2.2 子标题'])
         self.assertEqual([record['kind'] for record in records],
-                         ['eastAsia_font', 'size_upgrade', 'eastAsia_font'])
+                         ['font_departure', 'size_upgrade', 'font_departure'])
         self.assertEqual(records[1]['value'], 16.0)
 
     def test_heading_with_matching_body_font_and_bold_is_accepted(self):
-        records = checker.find_violations(DOCUMENT.encode('utf-8'), 24)
+        records = checker.find_violations(DOCUMENT.encode('utf-8'), 24, '宋体')
         self.assertFalse(any(record['paragraph'] == '2.3 合规标题' for record in records))
 
     def test_non_heading_black_font_is_ignored(self):
-        records = checker.find_violations(DOCUMENT.encode('utf-8'), 24)
+        records = checker.find_violations(DOCUMENT.encode('utf-8'), 24, '宋体')
         self.assertFalse(any(record['paragraph'] == '正文中的黑体却非标题' for record in records))
 
     def test_docx_zip_and_cli_return_nonzero_on_violation(self):
@@ -50,12 +50,25 @@ class DocxStyleCheckTests(unittest.TestCase):
             with zipfile.ZipFile(target, 'w') as archive:
                 archive.writestr('word/document.xml', DOCUMENT)
             self.assertIn(b'2.1', checker.read_document_xml(target))
-            result = subprocess.run([sys.executable, '-B', str(SCRIPT), str(target), '--json'],
+            result = subprocess.run([sys.executable, '-B', str(SCRIPT), str(target),
+                                    '--baseline-font', '宋体', '--baseline-pt', '12', '--json'],
                                     capture_output=True, text=True, encoding='utf-8')
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             payload = json.loads(result.stdout)
             self.assertFalse(payload['ok'])
             self.assertEqual(len(payload['violations']), 3)
+
+    def test_declared_baseline_is_required_and_not_universal(self):
+        with self.assertRaises(ValueError):
+            checker.find_violations(DOCUMENT.encode('utf-8'), 24, '')
+        heiti = checker.find_violations(DOCUMENT.encode('utf-8'), 24, '黑体')
+        self.assertFalse(any(record['paragraph'] == '2.1 实验步骤' and record['kind'] == 'font_departure'
+                             for record in heiti))
+        self.assertTrue(any(record['paragraph'] == '2.3 合规标题' and record['value'] == '宋体'
+                            for record in heiti))
+        result = subprocess.run([sys.executable, '-B', str(SCRIPT), 'missing.docx', '--json'],
+                                capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(result.returncode, 2)
 
 
 if __name__ == '__main__':

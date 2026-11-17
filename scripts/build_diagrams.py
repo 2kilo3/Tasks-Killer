@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Maintain the two static SVG/HTML sources. PNGs are rendered from these SVGs."""
+"""Write the workflow SVG and HTML. A PNG is not generated here."""
 from html import escape
 from pathlib import Path
 
@@ -34,7 +34,7 @@ def save(name, title, desc, height, content, legend_new='新增：经验层'):
            '<defs><style>text{font-family:"Microsoft YaHei","Noto Sans SC",sans-serif}</style>'
            f'<marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="{SOFT}"/></marker></defs>'
            f'<rect width="1200" height="{height}" fill="{PAPER}"/>'
-           + text(40, 44, 'LAB-REPORT / 2.2', 14, SOFT) + text(40, 88, title, 30, INK, 600)
+           + text(40, 44, 'tasks-killer / 3.0', 14, SOFT) + text(40, 88, title, 30, INK, 600)
            + content + f'<path d="M40 {height - 64} H1160" stroke="#bfc0c0"/>' + legend + '</svg>')
     ROOT.mkdir(parents=True, exist_ok=True)
     (ROOT / (name + '.svg')).write_text(svg + '\n', encoding='utf-8')
@@ -46,35 +46,20 @@ def save(name, title, desc, height, content, legend_new='新增：经验层'):
 
 
 def build():
-    stages = [('01 意图与确认', ['地图条目 → 意图清单', '合并经验审核后确认']), ('02 实验与取证', ['冻结 Step Card', '逐步取证与绑定']),
-              ('03 写作与排版', ['副本允许区域', '保护固定区与样式']), ('04 独立审查', ['白名单投喂与 REVIEW 表', '双重版本绑定']),
-              ('05 复核与交付', ['最后页面与作者回读', 'finish 当前撤销核查'])]
+    stages = [('01 目标审查', ['AI 对照材料', 'pass 才请人看']),
+              ('02 人确认目标', ['message_ref', '沉默不算确认']),
+              ('03 分段实现', ['并行离线段', '独占资源加锁']),
+              ('04 对照产物', ['段内验收', '缺了就返工']),
+              ('05 终审与交付', ['AI 再审结果', '人看验证材料'])]
     flow = arrow('M140 236 V268')
     flow += ''.join(arrow(f'M{x + 200} 342 H{x + 228}') for x in (40, 272, 504, 736))
     flow += arrow('M600 416 V452')
-    flow += arrow('M600 572 V608', True)
-    flow += arrow('M600 728 V764', True)
-    flow += box(40, 116, 1120, 120, '00 材料地图 · 意图前的硬门', ['通读全部材料 → 索引式 MATERIALS_MAP；每条硬要求引用 map_id', '关键材料分 subagent / 新 session 精读；地图只记定位与短引文'], 'new', '新增 · 2.2 硬门')
+    flow += box(40, 116, 1120, 120, '00 材料与目标', ['MATERIALS_MAP 索引全部已给材料', '目标文档写清要做什么、依据和完成标准'], 'original', '入口')
     for i, (label, lines) in enumerate(stages):
         flow += box(40 + i * 232, 268, 200, 148, label, lines, 'affected')
-    flow += box(40, 452, 1120, 120, '分段 session / subagent 编排', ['材料 → 意图 → 执行 → 写作 → 独审 → 修订；只共享短交接包', '一个编排者写 state.json；共享 VM 同时只有一个执行者；只切上下文，不切权限'], 'new')
-    flow += box(310, 608, 580, 120, '本轮增量采集 → 检查点保存候选', ['结尾只落盘；下次明确使用再读材料、展示、人审'], 'new')
-    flow += box(40, 764, 1120, 120, '关闭 / 空库 / 不可用时的原流程', ['从未采用：正常继续；已经采用：保留依赖，恢复核查或局部复核后显式解除'], 'original')
-    flow += text(40, 912, '统一核查位置：应用前、status / 恢复、record_review、finish；撤销不直接改写任务状态。', 16, SOFT)
-    save('workflow', '实验文档 · 材料地图、五段流程与受监督经验', '顶部蓝框为 2.2 材料地图硬门，橙框为受影响的五段流程，蓝框为新增编排与经验采集，灰框为原流程回退；验收门槛保持。', 1000, flow, '新增：地图 / 编排 / 经验层')
-
-    architecture = arrow('M344 212 H420') + arrow('M772 212 H848')
-    architecture += arrow('M1004 284 V328') + arrow('M848 396 H772') + arrow('M420 396 H344')
-    architecture += arrow('M196 460 V500 H600 V544', True)
-    architecture += box(40, 140, 304, 144, '宿主 / 主编排者', ['事件处 collect；显式会话身份', '无 hooks 仍可检查点调用'], 'new')
-    architecture += box(420, 140, 352, 144, '私有根 · 统一权威', ['追加分片 / 不可变正文 / registry', '锁 + 原子替换；视图可重建'], 'new')
-    architecture += box(848, 140, 312, 144, '待审候选与回顾', ['本轮保存；自动保存不等于生效', '假设不能驱动执行'], 'new')
-    architecture += box(848, 328, 312, 144, '下次明确使用 · 人审', ['先读材料；冻结展示集合', '真实回应核对 → 逐项批准'], 'new')
-    architecture += box(420, 328, 352, 144, '少量有效上下文', ['先核状态 / 批准 / 来源 / 依赖', '再匹配范围；应用前再次核查'], 'new')
-    architecture += box(40, 328, 304, 144, '原五段流程', ['记录实际应用；独审双重绑定', 'finish 同锁核查并写 done'], 'affected')
-    architecture += box(40, 544, 1120, 120, '关闭回退与撤销影响', ['无依赖继续原流程；已有依赖失效只复核相关部分，解除后重新独审；原模板、页面与元数据门槛保留'], 'original')
-    architecture += text(40, 708, '范围：受控入口与单一私有根；不承诺同权限伪造检测、外部注入隔离或整根回滚检测；经验层不作调度/进度总线。', 16, SOFT)
-    save('memory-architecture', '经验层 · 候选、人审与当前有效性', '从宿主采集到私有候选，下次先读材料再人审，经统一筛选进入原流程；关闭或撤销保留真实依赖。', 800, architecture)
+    flow += box(40, 452, 1120, 120, '一个编排者', ['state.json 与 progress/STATUS.md 只由编排者写', '纠正先进 constraints；未经约定不另写 Markdown'], 'new', '3.0')
+    flow += text(40, 620, '形式层：formal/TasksKiller.tla 与 TasksKiller.lean。工具不在时跑 formal/check_model.py。', 16, SOFT)
+    save('workflow', 'tasks-killer · 目标、实现、两道人审', '材料与目标之后，AI 先审目标，人确认，然后分段实现并对照产物，最后 AI 与人各看一次最终结果。', 700, flow, '3.0：进度与约束')
 
 
 if __name__ == '__main__':

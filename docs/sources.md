@@ -21,7 +21,7 @@
 
 参考 [Frontend Slides](https://github.com/zarazhangrui/frontend-slides) 的实际效果优先、快速安装、风格图库与能力边界，以及 [MARP Slides](https://github.com/robonuggets/marp-slides) 的简洁上手与示例组织。2026-10-22 查询 GitHub 时分别为 31,043 与 326 stars；仅记录选样依据，不作为质量保证。未复制其截图或介绍文案。
 
-流程图沿原灰白底独立绘制。2.1 统一图例：蓝框“新增”表示经验层；橙框“受影响”表示接入经验但保持验收门槛的原环节，包含独立审查；灰框“原职责保留”表示关闭回退与原有责任。文字标签与颜色共同编码，不单靠颜色辨认。SVG 为可维护显示源，scripts/build_diagrams.py 同步生成 SVG/HTML，PNG 从同一 SVG 渲染；不复制第三方图像。
+流程图由 `scripts/build_diagrams.py` 生成 SVG 和 HTML。3.0.0 的图只画目标、两道人审、分段实现和进度文件。不复制第三方图像。
 
 
 ## 2.0 的工作流与状态设计参考
