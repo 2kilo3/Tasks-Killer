@@ -1,12 +1,15 @@
 """Synthetic DOCX contracts for figure fit; no Word install or rendering required."""
 import importlib.util
+import io
 import json
 from pathlib import Path
+import re
 import struct
 import subprocess
 import sys
 import tempfile
 import unittest
+import zipfile
 import zlib
 
 from docx import Document
@@ -14,7 +17,7 @@ from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.shared import Mm
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'figure_fit_check.py'
+SCRIPT = Path(__file__).resolve().parents[1] / 'skills' / 'lab-report' / 'scripts' / 'figure_fit_check.py'
 spec = importlib.util.spec_from_file_location('figure_fit_check', SCRIPT)
 checker = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(checker)
@@ -220,6 +223,29 @@ class FigureFitCheckTests(unittest.TestCase):
         self.assertFalse(payload['ok'])
         self.assertEqual(payload['images'][0]['px_width'], 1200)
         self.assertEqual(payload['images'][0]['status'], 'overwide')
+
+    def test_missing_page_size_is_reported_and_not_treated_as_a4(self):
+        image = self.make_image('plain.png', 400, 300)
+        target, document = self.make_doc('missing-page.docx')
+        set_page(document.sections[0])
+        document.add_picture(str(image), width=Mm(80))
+        document.save(str(target))
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(target) as source, zipfile.ZipFile(buffer, 'w') as rewritten:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename == 'word/document.xml':
+                    data = re.sub(br'<w:pgSz\b[^>]*/>', b'', data)
+                rewritten.writestr(item, data)
+        target.write_bytes(buffer.getvalue())
+
+        report = checker.inspect_document(target)
+
+        self.assertFalse(report['ok'])
+        self.assertTrue(report['gaps'])
+        self.assertIsNone(report['sections'][0]['page_width_mm'])
+        self.assertNotIn('210', json.dumps(report['sections']))
+        self.assertEqual(report['images'][0]['status'], 'page_gap')
 
     def test_missing_file_is_an_input_error(self):
         result = subprocess.run([sys.executable, '-B', str(SCRIPT), str(self.temp / 'none.docx'), '--json'],

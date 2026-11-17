@@ -1,5 +1,5 @@
 {
-  "description": "实验报告与实验论文 Skill：可溯源意图确认、真实证据、模板样式、独立审查与状态恢复。",
+  "description": "tasks-killer：目标、真实产物、两道人审、并行与形式检查。lab-report 只负责文档写作与终页核验。",
   "homepage": "",
   "topics": [
     "agent-skills",

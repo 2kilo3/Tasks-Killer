@@ -1,0 +1,6 @@
+{
+  "id": "no-named-tools-in-orchestrator",
+  "paths": ["SKILL.md"],
+  "forbid_regex": ["VMware", "Postman", "vmware", "postman"],
+  "message": "The orchestrator discovers a tool skill from skills/*/SKILL.md. It does not name a lab tool in the default flow."
+}

@@ -21,7 +21,7 @@
 9. **对象清单绑定（Object-set binding）。** 指导书写明的节点集合（如 `c0+s1/s2/s3+h1–h6`）、主机名、接口或文件必须进执行卡 `objects`/`must_include`；禁止用同实验的另一拓扑（如进阶 `1s3h`）冒充基础拓扑证据。`[来源:lab8-iter]`
 10. **交互提示符要像该环境（Prompt fidelity）。** 交互式学生终端须显示符合环境的提示符（如 `ubuntu@sdnhubvm…$`），不得用 `bash-4.3$` 等非约定提示符冒充；指导书分多步时，不得用分号/一行批量命令合成一屏，除非指导书本身就是一条命令。`[来源:lab8-iter]`
 11. **报告标注默认关闭（Annotation opt-in）。** 红框/箭头默认不画；用户明确要求时才可加，且不得遮挡关键字段、框线大致轴对齐。MiniEdit 控制链路等软件自带红虚线不算报告标注红框。`[来源:lab8-iter]`
-12. **样式不得擅自升级（No style escalation）。** 允许区小节标题不得换为黑体或放大字号；与正文同中文字体、同字号，必要时仅加粗。样式规则见 [文档输出](document-output.md)，独审按 [审查清单](review-checklist.md) 核对。`[来源:lab8-iter]`
+12. **样式不得擅自升级（No style escalation）。** 允许区小节标题不得离开当次模板已确认的字体和字号；没有另行规定时与正文同字体、同字号，必要时仅加粗。样式规则见 [文档输出](../skills/lab-report/references/document-output.md)，终页按 [审查清单](../skills/lab-report/references/review-checklist.md) 核对。`[来源:lab8-iter]`
 13. **跨轮证据失效（Round-bound evidence）。** 配置、MAC、拓扑或会话轮次变化后，旧图不得冒充本轮；旧图带过时标注或旧会话 MAC 必须重采。`[来源:lab-report]` B11.3 的收紧；`[来源:lab8-iter]`
 14. **宿主机工具 + 客户机服务须如实说明（Forwarding disclosure）。** 允许宿主机 Postman 经本地端口转发访问客户机 REST，但正文须写明转发关系；主证据仍是 Postman 窗口，不是只交 curl 返回值。`[来源:lab8-iter]`
 15. **破坏性操作先建检查点（Checkpoint before destruction）。** 清缓存、重置环境、删数据、改系统配置或网络、重装组件前，先建立可恢复的检查点（快照、备份、导出、原始文件副本），记录回滚方法和恢复时实际使用的文件/命令。检查点打不开、覆盖不到受影响对象，或回滚步骤无法复现时，不得执行破坏性动作；指导书未要求时先问或改用无损做法。`[推断/扩展]`

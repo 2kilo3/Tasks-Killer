@@ -1,0 +1,17 @@
+{
+  "id": "no-memory-ledger",
+  "paths": [
+    "SKILL.md",
+    "README.md",
+    "scripts/workflow_state.py",
+    "references/state-machine.md",
+    "references/orchestration.md"
+  ],
+  "forbid_regex": [
+    "LAB_REPORT_MEMORY_HOME",
+    "experience_store",
+    "memory_begin",
+    "Claude Mem"
+  ],
+  "message": "The private experience ledger is gone. Promote a correction to constraints/ instead of storing it in a hidden memory root."
+}

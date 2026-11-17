@@ -1,0 +1,6 @@
+{
+  "id": "progress-and-markdown-contract",
+  "paths": ["SKILL.md"],
+  "require_regex": ["progress/STATUS.md", "不要写未经约定的 Markdown"],
+  "message": "The orchestrator must name the progress file and forbid unsolicited markdown."
+}

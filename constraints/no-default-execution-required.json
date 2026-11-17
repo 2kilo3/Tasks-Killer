@@ -1,0 +1,9 @@
+{
+  "id": "no-default-execution-required",
+  "paths": ["scripts/workflow_state.py"],
+  "forbid_regex": [
+    "get\\('execution_required',\\s*True\\)",
+    "execution_required',\\s*True"
+  ],
+  "message": "init must not default execution_required to true. Derive it from task_type or an explicit boolean."
+}

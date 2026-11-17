@@ -1,0 +1,6 @@
+{
+  "id": "no-universal-typeface",
+  "paths": ["skills/lab-report/scripts/docx_style_check.py"],
+  "forbid_regex": ["黑体", "SimHei", "simhei"],
+  "message": "Style check compares a declared baseline. It must not hardcode a typeface."
+}

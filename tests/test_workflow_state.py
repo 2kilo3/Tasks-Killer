@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import time
 import subprocess
 import sys
 import tempfile
@@ -25,13 +26,25 @@ class WorkflowTests(unittest.TestCase):
         self.call('init', maker='maker-session', sources=['source.txt'],
                   execution_required=False, require_materials_map=False)
         # The DONE gate requires deliverables newer than the recorded stage start.
-        os.utime(self.root / 'report.docx')
+        # Coarse filesystems truncate mtime to the previous whole second.
+        later = time.time() + 2
+        os.utime(self.root / 'report.docx', (later, later))
 
     def call(self, action, **kwargs):
         return w.transact(self.state, dict(action=action, **kwargs))
 
+    def pass_goal_review(self):
+        state = self.call('status')
+        value = dict(reviewer='goal-reviewer', context_ref='synthetic-test-only:goal-context',
+                     target='goal', verdict='pass',
+                     intention_sha256=state['intention']['sha256'],
+                     findings=[{'item': 'scope', 'status': 'pass', 'reason': 'Synthetic goal matches the fixture'}])
+        (self.root / 'goal-review.json').write_text(json.dumps(value, ensure_ascii=False), encoding='utf-8')
+        return self.call('record_goal_review', path='goal-review.json')
+
     def ready(self):
         self.call('submit_intention', path='意图.md')
+        self.pass_goal_review()
         self.call('confirm', message_ref='synthetic-test-only:user-confirmation')
         return self.call('submit_draft', paths=['report.docx'], evidence=['screen.png'])
 
@@ -47,10 +60,12 @@ class WorkflowTests(unittest.TestCase):
         self.ready()
         self.receipt()
         self.call('record_review', path='review.json')
+        self.call('confirm_final', message_ref='synthetic-test-only:final-confirmation')
         return self.call('finish', artifacts=['report.docx'])
 
     def confirmed(self):
         self.call('submit_intention', path='意图.md')
+        self.pass_goal_review()
         return self.call('confirm', message_ref='synthetic-test-only:user-confirmation')
 
     def plan_step(self, step_id='S1', screenshot=True, **overrides):
@@ -176,6 +191,7 @@ class WorkflowTests(unittest.TestCase):
         self.call('submit_draft', paths=['report.docx'], evidence=['screen.png'])
         self.receipt()
         self.call('record_review', path='review.json')
+        self.call('confirm_final', message_ref='synthetic-test-only:final-confirmation')
         self.assertEqual(self.call('finish', artifacts=['report.docx'])['phase'], 'done')
 
     def test_new_intention_invalidates_frozen_card(self):
@@ -187,6 +203,7 @@ class WorkflowTests(unittest.TestCase):
         (self.root / '意图.md').write_text('new synthetic scope', encoding='utf-8')
         self.call('status')
         self.call('submit_intention', path='意图.md')
+        self.pass_goal_review()
         self.call('confirm', message_ref='synthetic-test-only:new-confirmation')
         with self.assertRaises(w.GuardError):
             self.call('submit_draft', paths=['report.docx'], evidence=['screen.png'])
@@ -217,6 +234,10 @@ class WorkflowTests(unittest.TestCase):
 
     def test_requires_actual_confirmation_reference(self):
         self.call('submit_intention', path='意图.md')
+        with self.assertRaises(w.GuardError):
+            self.call('confirm', message_ref='synthetic-test-only:too-early')
+        self.assertEqual(self.call('status')['phase'], 'goal_review')
+        self.pass_goal_review()
         for request in ({'action': 'confirm'}, {'action': 'submit_draft', 'paths': ['report.docx']},
                         {'action': 'rollback', 'to': 'produce', 'reason': 'skip'}):
             with self.assertRaises(w.GuardError):
@@ -248,7 +269,7 @@ class WorkflowTests(unittest.TestCase):
         self.finish()
         (self.root / '意图.md').write_text('new requirements', encoding='utf-8')
         state = self.call('status')
-        self.assertEqual(state['phase'], 'awaiting_confirmation')
+        self.assertEqual(state['phase'], 'goal_review')
         self.assertIsNone(state['approval'])
 
     def test_changed_source_blocks_until_impact_assessed(self):
