@@ -1,5 +1,5 @@
 {
-  "description": "tasks-killer：目标、真实产物、两道人审、并行与形式检查。lab-report 只负责文档写作与终页核验。",
+  "description": "Tasks-Killer：高信任多技能编排。写清可验收目标，对照真实产物做完。独立 AI 先审，人只确认目标文档和最终结果。段可并行，独占资源用锁；能检查的纠正写入 constraints。lab-report 是并列的报告技能，不是适配器。",
   "homepage": "",
   "topics": [
     "agent-skills",
